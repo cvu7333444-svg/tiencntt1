@@ -12,19 +12,17 @@ export async function POST(req) {
       return NextResponse.json({ message: "Thiếu email hoặc mật khẩu" }, { status: 400 });
     }
 
-    // 1. Dùng .lean() để lấy dữ liệu thô từ MongoDB, tránh bị Schema ẩn mất passwordHash
     const user = await User.findOne({ email: email.toLowerCase() }).lean();
     if (!user) {
       return NextResponse.json({ message: "Email hoặc mật khẩu không đúng" }, { status: 401 });
     }
 
-    // 2. Lấy chuỗi hash mật khẩu từ MongoDB (passwordHash hoặc password)
-    const hash = user.passwordHash || user.password;
+    // Lấy hash và xóa sạch khoảng trắng thừa
+    const hash = (user.passwordHash || user.password || "").trim();
     if (!hash) {
       return NextResponse.json({ message: "Tài khoản chưa có mật khẩu" }, { status: 400 });
     }
 
-    // 3. So sánh mật khẩu
     const isValid = await comparePassword(password, hash);
     if (!isValid) {
       return NextResponse.json({ message: "Email hoặc mật khẩu không đúng" }, { status: 401 });
@@ -34,7 +32,6 @@ export async function POST(req) {
       return NextResponse.json({ message: "Tài khoản đã bị khóa" }, { status: 403 });
     }
 
-    // 4. Tạo token và set cookie
     const token = signToken(user);
     await setAuthCookie(token);
 
