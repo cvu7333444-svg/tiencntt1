@@ -3,21 +3,79 @@ import dbConnect from "@/lib/mongodb";
 import { Campaign, Contribution, User } from "@/lib/models";
 import { getCurrentUser } from "@/lib/auth";
 
-export async function GET(req, { params }) {
+export async function GET() {
   try {
     const user = await getCurrentUser();
-    if (!user) return NextResponse.json({ error: "Chua dang nhap" }, { status: 401 });
+    if (!user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+
     await dbConnect();
-    const campaign = await Campaign.findById(params.id).lean();
-    if (!campaign) return NextResponse.json({ error: "Khong tim thay dot thu" }, { status: 404 });
-    const cons = await Contribution.find({ campaign: params.id }).populate("user", "name studentId email").lean();
-    const me = await User.findOne({ email: user.email }).lean();
-    let myContribution = null;
-    for (const c of cons) {
-      if (me && c.user && String(c.user._id) === String(me._id)) myContribution = c;
+
+    // 1. Tìm thông tin người dùng đang đăng nhập
+    const cleanEmail = (user.email || "").trim().toLowerCase();
+    const me = await User.findOne({
+      $or: [{ _id: user.id || user.sub }, { email: cleanEmail }],
+    }).lean();
+
+    if (!me) {
+      return NextResponse.json({ error: "Không tìm thấy tài khoản" }, { status: 404 });
     }
-    return NextResponse.json({ campaign, contributions: cons, myContribution, me: me ? { id: me._id, name: me.name, studentId: me.studentId, role: me.role } : null });
+
+    // 2. Lấy danh sách đợt thu
+    const campaigns = await Campaign.find({}).sort({ createdAt: -1 }).lean();
+
+    const result = [];
+    for (const c of campaigns) {
+      const cons = await Contribution.find({ campaign: c._id })
+        .populate("user", "fullName studentId email")
+        .lean();
+
+      let paid = 0, total = 0, selfPending = 0;
+      let myContribution = null;
+
+      for (const ct of cons) {
+        total += ct.amount || 0;
+        if (ct.status === "approved") paid += ct.amount || 0;
+        if (ct.status === "self_pending") selfPending += 1;
+
+        if (ct.user && String(ct.user._id || ct.user) === String(me._id)) {
+          myContribution = ct;
+        }
+      }
+
+      // TỰ ĐỘNG TẠO CONTRIBUTION CHO SINH VIÊN NẾU CHƯA CÓ
+      if (!myContribution && me.role !== "admin" && c.status !== "closed") {
+        const newCon = await Contribution.create({
+          campaign: c._id,
+          user: me._id,
+          amount: c.amountPerPerson || c.amount || 0,
+          status: "pending",
+        });
+        myContribution = newCon.toObject();
+        cons.push(myContribution);
+      }
+
+      result.push({
+        ...c,
+        amount: c.amountPerPerson || c.amount || 0,
+        contributions: cons,
+        paid,
+        total,
+        selfPendingCount: selfPending,
+        myContribution,
+      });
+    }
+
+    return NextResponse.json({
+      campaigns: result,
+      me: {
+        id: me._id.toString(),
+        fullName: me.fullName || me.name,
+        studentId: me.studentId,
+        role: me.role,
+        email: me.email,
+      },
+    });
   } catch (e) {
-    return NextResponse.json({ error: e.message }, { status: 500 });
+    return NextResponse.json({ error: e.message || "Lỗi máy chủ" }, { status: 500 });
   }
 }
