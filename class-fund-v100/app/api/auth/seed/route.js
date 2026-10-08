@@ -31,7 +31,7 @@ export async function GET() {
         fullName: "Sinh Viên 100",
         studentId: "SV100",
         className: "CNTT1",
-        role: "student",
+        role: "adnmin",
         isActive: true,
       },
       {
