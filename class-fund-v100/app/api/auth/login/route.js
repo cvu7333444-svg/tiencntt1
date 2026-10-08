@@ -8,7 +8,6 @@ export async function POST(req) {
     await dbConnect();
     const body = await req.json();
 
-    // 1. Làm sạch input gửi lên từ client
     const cleanEmail = (body.email || "").trim().toLowerCase();
     const cleanPassword = (body.password || "").trim();
 
@@ -16,7 +15,7 @@ export async function POST(req) {
       return NextResponse.json({ message: "Thiếu email hoặc mật khẩu" }, { status: 400 });
     }
 
-    // 2. Tìm user trong DB bằng Regex để bỏ qua khoảng trắng thừa ở đầu/cuối trong Database
+    // Tìm user bằng Regex để bỏ qua khoảng trắng thừa nếu có
     const user = await User.findOne({
       email: { $regex: new RegExp("^\\s*" + cleanEmail + "\\s*$", "i") },
     }).lean();
@@ -25,7 +24,7 @@ export async function POST(req) {
       return NextResponse.json({ message: "Email hoặc mật khẩu không đúng" }, { status: 401 });
     }
 
-    // 3. Lấy chuỗi hash và XÓA SẠCH khoảng trắng thừa (.trim())
+    // Làm sạch passwordHash
     const rawHash = user.passwordHash || user.password || "";
     const cleanHash = rawHash.trim();
 
@@ -33,7 +32,6 @@ export async function POST(req) {
       return NextResponse.json({ message: "Tài khoản chưa có mật khẩu" }, { status: 400 });
     }
 
-    // 4. So sánh mật khẩu đã được làm sạch
     const isValid = await comparePassword(cleanPassword, cleanHash);
     if (!isValid) {
       return NextResponse.json({ message: "Email hoặc mật khẩu không đúng" }, { status: 401 });
@@ -43,7 +41,6 @@ export async function POST(req) {
       return NextResponse.json({ message: "Tài khoản đã bị khóa" }, { status: 403 });
     }
 
-    // 5. Tạo token và set cookie đăng nhập
     const token = signToken(user);
     await setAuthCookie(token);
 
@@ -53,9 +50,9 @@ export async function POST(req) {
         _id: user._id.toString(),
         fullName: (user.fullName || "").trim(),
         email: (user.email || "").trim(),
-        role: user.role,
-        studentId: user.studentId,
-        className: user.className,
+        role: (user.role || "student").trim(),
+        studentId: (user.studentId || "").trim(),
+        className: (user.className || "").trim(),
       },
     });
   } catch (err) {

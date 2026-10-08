@@ -13,26 +13,39 @@ export async function GET() {
       bcrypt = require("bcrypt");
     }
 
-    // Tạo mã hóa mật khẩu 123456 chuẩn bằng chính thư viện của Server
-    const hash = await bcrypt.hash("123456", 10);
+    // Tạo mã hóa mật khẩu 123456 chuẩn (không bị dính khoảng trắng)
+    const newHash = await bcrypt.hash("123456", 10);
 
-    // Cập nhật vào tài khoản trong Database
-    const user = await User.findOneAndUpdate(
-      { email: "cvu7333444@gmail.com" },
-      { $set: { passwordHash: hash, password: hash } },
-      { new: true }
-    );
+    // Lấy tất cả user trong DB và làm sạch khoảng trắng
+    const users = await User.find({});
+    
+    for (const u of users) {
+      const cleanEmail = (u.email || "").trim().toLowerCase();
+      const cleanStudentId = (u.studentId || "").trim();
+      const cleanFullName = (u.fullName || "").trim();
+      const cleanClassName = (u.className || "").trim();
+      const cleanRole = (u.role || "student").trim();
 
-    if (!user) {
-      return NextResponse.json(
-        { message: "Không tìm thấy tài khoản cvu7333444@gmail.com trong Database" },
-        { status: 404 }
+      await User.updateOne(
+        { _id: u._id },
+        {
+          $set: {
+            email: cleanEmail,
+            passwordHash: newHash,
+            password: newHash,
+            studentId: cleanStudentId,
+            fullName: cleanFullName,
+            className: cleanClassName,
+            role: cleanRole,
+            isActive: true
+          }
+        }
       );
     }
 
     return NextResponse.json({
       success: true,
-      message: "Đã cập nhật mật khẩu tài khoản cvu7333444@gmail.com về 123456 thành công!",
+      message: "Đã dọn dẹp toàn bộ khoảng trắng thừa trong MongoDB và reset mật khẩu về 123456 thành công!",
     });
   } catch (err) {
     return NextResponse.json({ error: err.message }, { status: 500 });
