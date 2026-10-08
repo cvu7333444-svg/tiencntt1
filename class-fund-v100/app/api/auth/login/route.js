@@ -6,24 +6,35 @@ import { comparePassword, signToken, setAuthCookie } from "@/lib/auth";
 export async function POST(req) {
   try {
     await dbConnect();
-    const { email, password } = await req.json();
+    const body = await req.json();
 
-    if (!email || !password) {
+    // 1. Làm sạch input gửi lên từ client
+    const cleanEmail = (body.email || "").trim().toLowerCase();
+    const cleanPassword = (body.password || "").trim();
+
+    if (!cleanEmail || !cleanPassword) {
       return NextResponse.json({ message: "Thiếu email hoặc mật khẩu" }, { status: 400 });
     }
 
-    const user = await User.findOne({ email: email.toLowerCase() }).lean();
+    // 2. Tìm user trong DB bằng Regex để bỏ qua khoảng trắng thừa ở đầu/cuối trong Database
+    const user = await User.findOne({
+      email: { $regex: new RegExp("^\\s*" + cleanEmail + "\\s*$", "i") },
+    }).lean();
+
     if (!user) {
       return NextResponse.json({ message: "Email hoặc mật khẩu không đúng" }, { status: 401 });
     }
 
-    // Lấy hash và xóa sạch khoảng trắng thừa
-    const hash = (user.passwordHash || user.password || "").trim();
-    if (!hash) {
+    // 3. Lấy chuỗi hash và XÓA SẠCH khoảng trắng thừa (.trim())
+    const rawHash = user.passwordHash || user.password || "";
+    const cleanHash = rawHash.trim();
+
+    if (!cleanHash) {
       return NextResponse.json({ message: "Tài khoản chưa có mật khẩu" }, { status: 400 });
     }
 
-    const isValid = await comparePassword(password, hash);
+    // 4. So sánh mật khẩu đã được làm sạch
+    const isValid = await comparePassword(cleanPassword, cleanHash);
     if (!isValid) {
       return NextResponse.json({ message: "Email hoặc mật khẩu không đúng" }, { status: 401 });
     }
@@ -32,6 +43,7 @@ export async function POST(req) {
       return NextResponse.json({ message: "Tài khoản đã bị khóa" }, { status: 403 });
     }
 
+    // 5. Tạo token và set cookie đăng nhập
     const token = signToken(user);
     await setAuthCookie(token);
 
@@ -39,8 +51,8 @@ export async function POST(req) {
       user: {
         id: user._id.toString(),
         _id: user._id.toString(),
-        fullName: user.fullName,
-        email: user.email,
+        fullName: (user.fullName || "").trim(),
+        email: (user.email || "").trim(),
         role: user.role,
         studentId: user.studentId,
         className: user.className,
