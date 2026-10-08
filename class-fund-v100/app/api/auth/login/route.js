@@ -15,16 +15,14 @@ export async function POST(req) {
       return NextResponse.json({ message: "Thiếu email hoặc mật khẩu" }, { status: 400 });
     }
 
-    // Tìm user bằng Regex để bỏ qua khoảng trắng thừa nếu có
-    const user = await User.findOne({
-      email: { $regex: new RegExp("^\\s*" + cleanEmail + "\\s*$", "i") },
-    }).lean();
+    // Tìm user trong DB theo email chuẩn không bị dính khoảng trắng
+    const user = await User.findOne({ email: cleanEmail }).lean();
 
     if (!user) {
       return NextResponse.json({ message: "Email hoặc mật khẩu không đúng" }, { status: 401 });
     }
 
-    // Làm sạch passwordHash
+    // Lấy hash mật khẩu
     const rawHash = user.passwordHash || user.password || "";
     const cleanHash = rawHash.trim();
 

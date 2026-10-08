@@ -13,41 +13,73 @@ export async function GET() {
       bcrypt = require("bcrypt");
     }
 
-    // Tạo mã hóa mật khẩu 123456 chuẩn (không bị dính khoảng trắng)
-    const newHash = await bcrypt.hash("123456", 10);
+    // Tạo mã hóa chuẩn cho mật khẩu "123456"
+    const hashPassword = await bcrypt.hash("123456", 10);
 
-    // Lấy tất cả user trong DB và làm sạch khoảng trắng
-    const users = await User.find({});
-    
-    for (const u of users) {
-      const cleanEmail = (u.email || "").trim().toLowerCase();
-      const cleanStudentId = (u.studentId || "").trim();
-      const cleanFullName = (u.fullName || "").trim();
-      const cleanClassName = (u.className || "").trim();
-      const cleanRole = (u.role || "student").trim();
+    // Danh sách 3 tài khoản thử nghiệm
+    const testAccounts = [
+      {
+        email: "cvu7333444@gmail.com",
+        fullName: "Vũ Tiến Cường",
+        studentId: "12",
+        className: "CNTT1",
+        role: "admin",
+        isActive: true,
+      },
+      {
+        email: "sv100@class.edu",
+        fullName: "Sinh Viên 100",
+        studentId: "SV100",
+        className: "CNTT1",
+        role: "student",
+        isActive: true,
+      },
+      {
+        email: "test@gmail.com",
+        fullName: "Tài Khoản Thử Nghiệm",
+        studentId: "TEST01",
+        className: "CNTT1",
+        role: "student",
+        isActive: true,
+      },
+    ];
 
-      await User.updateOne(
-        { _id: u._id },
+    const results = [];
+
+    for (const acc of testAccounts) {
+      const cleanEmail = acc.email.trim().toLowerCase();
+
+      const updatedUser = await User.findOneAndUpdate(
+        { email: cleanEmail },
         {
           $set: {
             email: cleanEmail,
-            passwordHash: newHash,
-            password: newHash,
-            studentId: cleanStudentId,
-            fullName: cleanFullName,
-            className: cleanClassName,
-            role: cleanRole,
-            isActive: true
-          }
-        }
+            passwordHash: hashPassword,
+            password: hashPassword,
+            fullName: acc.fullName,
+            studentId: acc.studentId,
+            className: acc.className,
+            role: acc.role,
+            isActive: acc.isActive,
+          },
+        },
+        { upsert: true, new: true }
       );
+
+      results.push({
+        email: updatedUser.email,
+        fullName: updatedUser.fullName,
+        role: updatedUser.role,
+        matKhau: "123456",
+      });
     }
 
     return NextResponse.json({
       success: true,
-      message: "Đã dọn dẹp toàn bộ khoảng trắng thừa trong MongoDB và reset mật khẩu về 123456 thành công!",
+      message: "Đã tạo / cập nhật thành công các tài khoản thử nghiệm!",
+      accounts: results,
     });
   } catch (err) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+    return NextResponse.json({ error: err.message || "Lỗi tạo tài khoản" }, { status: 500 });
   }
 }
