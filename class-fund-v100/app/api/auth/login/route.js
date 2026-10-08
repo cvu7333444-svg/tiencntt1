@@ -12,13 +12,13 @@ export async function POST(req) {
       return NextResponse.json({ message: "Thiếu email hoặc mật khẩu" }, { status: 400 });
     }
 
-    // 1. Tìm user và lấy cả trường passwordHash / password
-    const user = await User.findOne({ email: email.toLowerCase() }).select("+passwordHash +password");
+    // 1. Dùng .lean() để lấy dữ liệu thô từ MongoDB, tránh bị Schema ẩn mất passwordHash
+    const user = await User.findOne({ email: email.toLowerCase() }).lean();
     if (!user) {
       return NextResponse.json({ message: "Email hoặc mật khẩu không đúng" }, { status: 401 });
     }
 
-    // 2. Lấy chuỗi hash mật khẩu an toàn (MongoDB dùng passwordHash)
+    // 2. Lấy chuỗi hash mật khẩu từ MongoDB (passwordHash hoặc password)
     const hash = user.passwordHash || user.password;
     if (!hash) {
       return NextResponse.json({ message: "Tài khoản chưa có mật khẩu" }, { status: 400 });
@@ -40,8 +40,8 @@ export async function POST(req) {
 
     return NextResponse.json({
       user: {
-        id: user._id,
-        _id: user._id,
+        id: user._id.toString(),
+        _id: user._id.toString(),
         fullName: user.fullName,
         email: user.email,
         role: user.role,
