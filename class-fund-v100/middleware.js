@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
 import { jwtVerify } from "jose";
 
-// Cac route can dang nhap (client-side pages)
-const PROTECTED = ["/dashboard", "/campaigns", "/expense", "/members", "/reports"];
 // Chi admin moi vao duoc
-const ADMIN_ONLY = ["/expense", "/members", "/reports", "/settings"];
+const ADMIN_ONLY = ["/expense", "/members", "/reports", "/settings/bank"];
 
 // FIX: dung `jose` thay cho `jsonwebtoken` vi middleware chay tren Edge Runtime
 // (khong co Node `crypto` ma `jsonwebtoken` yeu cau -> loi build/runtime).

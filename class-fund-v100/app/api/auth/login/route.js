@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import { User } from "@/lib/models";
-import { comparePassword, signToken, setAuthCookie } from "@/lib/auth";
+import { comparePassword, signToken, setAuthCookie, normalizeRole } from "@/lib/auth";
 
 export async function POST(req) {
   try {
@@ -35,7 +35,7 @@ export async function POST(req) {
       return NextResponse.json({ message: "Email hoặc mật khẩu không đúng" }, { status: 401 });
     }
 
-    if (user.isActive === false) {
+    if (user.active === false || (user.active === undefined && user.isActive === false)) {
       return NextResponse.json({ message: "Tài khoản đã bị khóa" }, { status: 403 });
     }
 
@@ -46,11 +46,11 @@ export async function POST(req) {
       user: {
         id: user._id.toString(),
         _id: user._id.toString(),
-        fullName: (user.fullName || "").trim(),
+        name: (user.name || "").trim(),
+        fullName: (user.name || "").trim(),
         email: (user.email || "").trim(),
-        role: (user.role || "student").trim(),
+        role: normalizeRole((user.role || "member").trim()),
         studentId: (user.studentId || "").trim(),
-        className: (user.className || "").trim(),
       },
     });
   } catch (err) {

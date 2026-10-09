@@ -32,7 +32,7 @@ export async function GET(req) {
 
     const bank = await getFundBankInfo();
     const amount = con.amount;
-    const transferNote = buildTransferNote(con.user?.studentId, con.campaign?._id);
+    const transferNote = buildTransferNote(con.user?.name, con.campaign?.title);
     const imageUrl = buildVietQRImageUrl({
       bin: bank.bin,
       accountNumber: bank.accountNumber,

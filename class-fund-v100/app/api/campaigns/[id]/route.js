@@ -1,81 +1,93 @@
 import { NextResponse } from "next/server";
+import mongoose from "mongoose";
 import dbConnect from "@/lib/mongodb";
-import { Campaign, Contribution, User } from "@/lib/models";
+import { Campaign, Contribution, Transaction } from "@/lib/models";
 import { getCurrentUser } from "@/lib/auth";
 
-export async function GET() {
+export async function GET(req, { params }) {
   try {
     const user = await getCurrentUser();
     if (!user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+    if (user.role !== "admin") {
+      return NextResponse.json({ error: "Chỉ admin được xem chi tiết đợt thu" }, { status: 403 });
+    }
 
     await dbConnect();
-
-    // 1. Tìm thông tin người dùng đang đăng nhập
-    const cleanEmail = (user.email || "").trim().toLowerCase();
-    const me = await User.findOne({
-      $or: [{ _id: user.id || user.sub }, { email: cleanEmail }],
-    }).lean();
-
-    if (!me) {
-      return NextResponse.json({ error: "Không tìm thấy tài khoản" }, { status: 404 });
+    const campaign = await Campaign.findById(params.id).lean();
+    if (!campaign) {
+      return NextResponse.json({ error: "Không tìm thấy đợt thu" }, { status: 404 });
     }
 
-    // 2. Lấy danh sách đợt thu
-    const campaigns = await Campaign.find({}).sort({ createdAt: -1 }).lean();
+    const contributions = await Contribution.find({ campaign: campaign._id })
+      .populate("user", "name studentId email")
+      .sort({ createdAt: 1 })
+      .lean();
 
-    const result = [];
-    for (const c of campaigns) {
-      const cons = await Contribution.find({ campaign: c._id })
-        .populate("user", "fullName studentId email")
-        .lean();
+    return NextResponse.json({ campaign, contributions });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error.message || "Không tải được chi tiết đợt thu" },
+      { status: 500 }
+    );
+  }
+}
 
-      let paid = 0, total = 0, selfPending = 0;
-      let myContribution = null;
+export async function DELETE(req, { params }) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
+    if (user.role !== "admin") {
+      return NextResponse.json({ error: "Chỉ admin được xóa đợt thu" }, { status: 403 });
+    }
+    if (!mongoose.isValidObjectId(params.id)) {
+      return NextResponse.json({ error: "Mã đợt thu không hợp lệ" }, { status: 400 });
+    }
 
-      for (const ct of cons) {
-        total += ct.amount || 0;
-        if (ct.status === "approved") paid += ct.amount || 0;
-        if (ct.status === "self_pending") selfPending += 1;
+    await dbConnect();
+    const session = await mongoose.startSession();
+    let result;
 
-        if (ct.user && String(ct.user._id || ct.user) === String(me._id)) {
-          myContribution = ct;
+    try {
+      await session.withTransaction(async () => {
+        const campaign = await Campaign.findById(params.id).session(session).lean();
+        if (!campaign) {
+          result = { status: 404, body: { error: "Không tìm thấy đợt thu" } };
+          return;
         }
-      }
 
-      // TỰ ĐỘNG TẠO CONTRIBUTION CHO SINH VIÊN NẾU CHƯA CÓ
-      if (!myContribution && me.role !== "admin" && c.status !== "closed") {
-        const newCon = await Contribution.create({
-          campaign: c._id,
-          user: me._id,
-          amount: c.amountPerPerson || c.amount || 0,
-          status: "pending",
-        });
-        myContribution = newCon.toObject();
-        cons.push(myContribution);
-      }
+        const contributions = await Contribution.find({ campaign: campaign._id })
+          .select("_id status")
+          .session(session)
+          .lean();
+        const hasApprovedContribution = contributions.some((item) => item.status === "approved");
+        const hasRelatedTransaction = await Transaction.exists({
+          $or: [
+            { campaign: campaign._id },
+            { contribution: { $in: contributions.map((item) => item._id) } },
+          ],
+        }).session(session);
 
-      result.push({
-        ...c,
-        amount: c.amountPerPerson || c.amount || 0,
-        contributions: cons,
-        paid,
-        total,
-        selfPendingCount: selfPending,
-        myContribution,
+        if (hasApprovedContribution || hasRelatedTransaction) {
+          result = {
+            status: 409,
+            body: { error: "Không thể xóa đợt thu đã có khoản đóng góp được duyệt hoặc giao dịch tiền." },
+          };
+          return;
+        }
+
+        await Contribution.deleteMany({ campaign: campaign._id }, { session });
+        await Campaign.deleteOne({ _id: campaign._id }, { session });
+        result = { status: 200, body: { ok: true } };
       });
+    } finally {
+      await session.endSession();
     }
 
-    return NextResponse.json({
-      campaigns: result,
-      me: {
-        id: me._id.toString(),
-        fullName: me.fullName || me.name,
-        studentId: me.studentId,
-        role: me.role,
-        email: me.email,
-      },
-    });
-  } catch (e) {
-    return NextResponse.json({ error: e.message || "Lỗi máy chủ" }, { status: 500 });
+    return NextResponse.json(result.body, { status: result.status });
+  } catch (error) {
+    return NextResponse.json(
+      { error: error.message || "Không thể xóa đợt thu" },
+      { status: 500 }
+    );
   }
 }

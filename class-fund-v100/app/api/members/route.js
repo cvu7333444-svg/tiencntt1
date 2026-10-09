@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import { User, Contribution } from "@/lib/models";
 import { getCurrentUser, hashPassword } from "@/lib/auth";
+import { ensureContributionIndexes } from "@/lib/contribution-indexes";
 
 export async function GET() {
   try {
@@ -33,6 +34,7 @@ export async function POST(req) {
     const { name, studentId, email, password, phone } = await req.json();
     if (!name || !email || !password) return NextResponse.json({ error: "Thieu thong tin bat buoc" }, { status: 400 });
     await dbConnect();
+    await ensureContributionIndexes();
     const exist = await User.findOne({ email: email.toLowerCase().trim() });
     if (exist) return NextResponse.json({ error: "Email da ton tai" }, { status: 400 });
     const m = await User.create({

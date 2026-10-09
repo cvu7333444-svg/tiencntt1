@@ -22,9 +22,33 @@ export function formatDateTime(d) {
   }).format(date);
 }
 
-// Noi dung chuyen khoan cho QR: VD: QL SV100 DOT1
-export function buildTransferNote(studentId, campaignIdShort) {
-  const sid = (studentId || "SV").replace(/\s+/g, "").toUpperCase();
-  const cid = String(campaignIdShort || "").slice(-4).toUpperCase();
-  return `QUYLOP ${sid}${cid ? " " + cid : ""}`.slice(0, 50);
+export function isCampaignDeadlinePassed(deadline, now = new Date()) {
+  if (!deadline) return false;
+  const dueDate = new Date(deadline);
+  if (Number.isNaN(dueDate.getTime())) return false;
+
+  const todayParts = new Intl.DateTimeFormat("en", {
+    timeZone: "Asia/Ho_Chi_Minh",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(now);
+  const today = Object.fromEntries(todayParts.map(({ type, value }) => [type, value]));
+  const todayKey = `${today.year}-${today.month}-${today.day}`;
+  return todayKey > dueDate.toISOString().slice(0, 10);
+}
+
+// Noi dung chuyen khoan cho QR: ten sinh vien + ten dot thu.
+export function buildTransferNote(studentName, campaignTitle) {
+  const normalize = (value) =>
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/đ/gi, "d")
+      .replace(/[^a-zA-Z0-9 ]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  const name = normalize(studentName) || "Sinh vien";
+  const campaign = normalize(campaignTitle) || "Nop tien";
+  return `${name} ${campaign}`.slice(0, 50).trim();
 }

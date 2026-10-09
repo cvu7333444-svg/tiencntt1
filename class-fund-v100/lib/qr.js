@@ -7,14 +7,9 @@ import dbConnect from "./mongodb";
 
 // Doc thong tin ngan hang quy: uu tien DB (admin cau hinh tren web), fallback env.
 export async function getFundBankInfo() {
-  let dbSettings = null;
-  try {
-    await dbConnect();
-    const doc = await Settings.findOne({ key: "fund_bank" }).lean();
-    if (doc && doc.value) dbSettings = doc.value;
-  } catch {
-    dbSettings = null;
-  }
+  await dbConnect();
+  const doc = await Settings.findOne({ key: "fund_bank" }).lean();
+  const dbSettings = doc?.value;
   return {
     bin: (dbSettings?.bin || process.env.FUND_BANK_BIN || "970422").trim(),
     accountNumber: (dbSettings?.accountNumber || process.env.FUND_BANK_ACCOUNT || "0123456789").trim(),

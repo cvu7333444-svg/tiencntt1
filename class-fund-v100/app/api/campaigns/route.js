@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
-import { Campaign, Contribution, User } from "@/lib/models";
+import { Campaign, Contribution, Transaction, User } from "@/lib/models";
 import { getCurrentUser } from "@/lib/auth";
+import { ensureContributionIndexes } from "@/lib/contribution-indexes";
 
 // GET: Danh sách đợt thu (Cả Admin và Sinh viên đều gọi được)
 export async function GET() {
@@ -10,6 +11,7 @@ export async function GET() {
     if (!user) return NextResponse.json({ error: "Chưa đăng nhập" }, { status: 401 });
 
     await dbConnect();
+    await ensureContributionIndexes();
 
     // 1. Tìm thông tin user hiện tại
     const cleanEmail = (user.email || "").trim().toLowerCase();
@@ -20,9 +22,8 @@ export async function GET() {
 
     const result = [];
     for (const c of campaigns) {
-      // Populate đúng trường fullName
       const cons = await Contribution.find({ campaign: c._id })
-        .populate("user", "fullName studentId email")
+        .populate("user", "name studentId email")
         .lean();
 
       let paid = 0, total = 0, selfPending = 0;
@@ -37,6 +38,35 @@ export async function GET() {
         }
       }
 
+      if (
+        !myContribution &&
+        me &&
+        me.role !== "admin" &&
+        me.active !== false &&
+        c.status !== "closed"
+      ) {
+        myContribution = await Contribution.findOneAndUpdate(
+          { campaign: c._id, user: me._id },
+          {
+            $setOnInsert: {
+              amount: c.amountPerPerson || c.amount || 0,
+              status: "pending",
+            },
+          },
+          { new: true, upsert: true, setDefaultsOnInsert: true }
+        ).lean();
+        cons.push(myContribution);
+        total += myContribution.amount || 0;
+      }
+
+      const hasApprovedContribution = cons.some((contribution) => contribution.status === "approved");
+      const relatedTransaction = await Transaction.exists({
+        $or: [
+          { campaign: c._id },
+          { contribution: { $in: cons.map((contribution) => contribution._id) } },
+        ],
+      });
+
       result.push({
         ...c,
         amount: c.amountPerPerson || c.amount || 0, // Chuẩn hóa tên trường số tiền
@@ -45,6 +75,7 @@ export async function GET() {
         total,
         selfPendingCount: selfPending,
         myContribution,
+        canDelete: !hasApprovedContribution && !relatedTransaction,
       });
     }
 
@@ -53,7 +84,7 @@ export async function GET() {
       me: me
         ? {
             id: me._id.toString(),
-            fullName: me.fullName || me.name,
+            fullName: me.name,
             studentId: me.studentId,
             role: me.role,
           }
@@ -79,6 +110,7 @@ export async function POST(req) {
     }
 
     await dbConnect();
+    await ensureContributionIndexes();
 
     // 1. Tạo campaign mới
     const campaign = await Campaign.create({
@@ -90,9 +122,10 @@ export async function POST(req) {
       createdBy: user.sub || user.id,
     });
 
-    // 2. Tìm tất cả Sinh viên (role: "student" hoặc "member") để tự động tạo khoản thu pending
+    // 2. Tìm tất cả thành viên đang hoạt động để tự động tạo khoản thu pending
     const members = await User.find({
-      $or: [{ role: "student" }, { role: "member" }],
+      role: { $in: ["member", "student"] },
+      active: { $ne: false },
       isActive: { $ne: false },
     }).lean();
 

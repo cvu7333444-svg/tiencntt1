@@ -4,6 +4,10 @@ import bcrypt from "bcryptjs";
 
 const COOKIE_NAME = "token";
 
+export function normalizeRole(role) {
+  return role === "student" ? "member" : role;
+}
+
 export function hashPassword(pw) {
   return bcrypt.hashSync(pw, 10);
 }
@@ -13,7 +17,7 @@ export function comparePassword(pw, hash) {
 
 export function signToken(user) {
   return jwt.sign(
-    { sub: user._id.toString(), email: user.email, role: user.role, name: user.name },
+    { sub: user._id.toString(), email: user.email, role: normalizeRole(user.role), name: user.name },
     process.env.JWT_SECRET,
     { expiresIn: process.env.JWT_EXPIRES || "7d" }
   );
@@ -46,7 +50,8 @@ export async function getCurrentUser() {
   const token = cookies().get(COOKIE_NAME)?.value;
   if (!token) return null;
   const payload = verifyToken(token);
-  return payload; // { sub, email, role, name }
+  if (!payload) return null;
+  return { ...payload, role: normalizeRole(payload.role) }; // { sub, email, role, name }
 }
 
 export { COOKIE_NAME };

@@ -1,6 +1,7 @@
 // Seed du lieu mau: chay bang `npm run seed` (node --env-file=.env lib/seed.js)
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
+import { ensureContributionIndexes } from "./contribution-indexes.js";
 
 const MONGODB_URI = process.env.MONGODB_URI;
 if (!MONGODB_URI) {
@@ -26,9 +27,9 @@ const CampaignSchema = new mongoose.Schema({
   createdBy: mongoose.Schema.Types.ObjectId,
 });
 const ContributionSchema = new mongoose.Schema({
-  campaign: mongoose.Schema.Types.ObjectId,
-  user: mongoose.Schema.Types.ObjectId,
-  amount: Number,
+  campaign: { type: mongoose.Schema.Types.ObjectId, ref: "Campaign", required: true, index: true },
+  user: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true, index: true },
+  amount: { type: Number, required: true, min: 0 },
   status: { type: String, default: "pending" },
   payMethod: { type: String, default: "cash" },
   proofImage: String,
@@ -37,6 +38,7 @@ const ContributionSchema = new mongoose.Schema({
   approvedAt: Date,
   approvedBy: mongoose.Schema.Types.ObjectId,
 });
+ContributionSchema.index({ campaign: 1, user: 1 }, { unique: true });
 const TransactionSchema = new mongoose.Schema({
   type: String,
   amount: Number,
@@ -58,6 +60,7 @@ const Settings = mongoose.model("Settings", SettingsSchema);
 
 async function run() {
   await mongoose.connect(MONGODB_URI);
+  await ensureContributionIndexes();
   console.log("Da ket noi MongoDB. Dang xoa du lieu cu...");
   await Promise.all([User.deleteMany({}), Campaign.deleteMany({}), Contribution.deleteMany({}), Transaction.deleteMany({})]);
 

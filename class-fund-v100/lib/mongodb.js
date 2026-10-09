@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 
 // Cache connection cho serverless (tránh mở nhiều connection liên tiếp)
-const globalAny = global;
+const globalAny = globalThis;
 if (!globalAny._mongoose) globalAny._mongoose = { conn: null, promise: null };
 
 async function dbConnect() {
@@ -13,7 +13,10 @@ async function dbConnect() {
         bufferCommands: false,
         maxPoolSize: 10,
       })
-      .then((m) => m);
+      .catch((error) => {
+        globalAny._mongoose.promise = null;
+        throw error;
+      });
   }
   globalAny._mongoose.conn = await globalAny._mongoose.promise;
   return globalAny._mongoose.conn;

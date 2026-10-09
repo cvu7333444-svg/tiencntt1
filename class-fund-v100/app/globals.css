@@ -5,3 +5,40 @@
 html { scroll-behavior: smooth; }
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
 .dark { color-scheme: dark; }
+
+@keyframes dashboard-bar-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-3px); }
+}
+
+@keyframes dashboard-wave-flow {
+  to { stroke-dashoffset: -24; }
+}
+
+@keyframes dashboard-tooltip-enter {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.dashboard-active-bar {
+  transform-box: fill-box;
+  transform-origin: center bottom;
+  animation: dashboard-bar-float 1.8s ease-in-out infinite;
+}
+
+.dashboard-wave-line {
+  stroke-dasharray: 4 3;
+  animation: dashboard-wave-flow 1.2s linear infinite;
+}
+
+.dashboard-tooltip-enter {
+  animation: dashboard-tooltip-enter 180ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-active-bar,
+  .dashboard-wave-line,
+  .dashboard-tooltip-enter {
+    animation: none;
+  }
+}

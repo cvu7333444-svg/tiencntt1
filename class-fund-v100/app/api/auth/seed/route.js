@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server";
 import dbConnect from "@/lib/mongodb";
 import { User } from "@/lib/models";
+import bcrypt from "bcryptjs";
 
 export async function GET() {
   try {
     await dbConnect();
-
-    let bcrypt;
-    try {
-      bcrypt = require("bcryptjs");
-    } catch {
-      bcrypt = require("bcrypt");
-    }
 
     // Tạo mã hóa chuẩn cho mật khẩu "123456"
     const hashPassword = await bcrypt.hash("123456", 10);
@@ -20,28 +14,24 @@ export async function GET() {
     const testAccounts = [
       {
         email: "cvu7333444@gmail.com",
-        fullName: "Vũ Tiến Cường",
+        name: "Vũ Tiến Cường",
         studentId: "12",
-        className: "CNTT1",
         role: "admin",
-        isActive: true,
+        active: true,
       },
       {
         email: "sv100@class.edu",
-        fullName: "Sinh Viên 100",
+        name: "Sinh Viên 100",
         studentId: "SV100",
-        className: "CNTT1",
         role: "admin",
-    
-        isActive: true,
+        active: true,
       },
       {
         email: "test@gmail.com",
-        fullName: "Tài Khoản Thử Nghiệm",
+        name: "Tài Khoản Thử Nghiệm",
         studentId: "TEST01",
-        className: "CNTT1",
-        role: "student",
-        isActive: true,
+        role: "member",
+        active: true,
       },
     ];
 
@@ -55,21 +45,19 @@ export async function GET() {
         {
           $set: {
             email: cleanEmail,
-            passwordHash: hashPassword,
+            name: acc.name,
             password: hashPassword,
-            fullName: acc.fullName,
             studentId: acc.studentId,
-            className: acc.className,
             role: acc.role,
-            isActive: acc.isActive,
+            active: acc.active,
           },
         },
-        { upsert: true, new: true }
+        { upsert: true, new: true, runValidators: true, setDefaultsOnInsert: true }
       );
 
       results.push({
         email: updatedUser.email,
-        fullName: updatedUser.fullName,
+        name: updatedUser.name,
         role: updatedUser.role,
         matKhau: "123456",
       });

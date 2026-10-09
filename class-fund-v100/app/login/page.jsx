@@ -4,12 +4,13 @@ import { useRouter } from "next/navigation";
 import { Wallet, Loader2 } from "lucide-react";
 import { Button, Input, Card } from "@/components/ui";
 import { useToast } from "@/components/Toast";
-import { useAuth } from "@/components/Providers";
+import { useAuth, useI18n } from "@/components/Providers";
 
 export default function LoginPage() {
   const router = useRouter();
   const toast = useToast();
   const { login } = useAuth();
+  const { t } = useI18n();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -23,7 +24,7 @@ export default function LoginPage() {
     const cleanPassword = password.trim();
 
     if (!cleanEmail || !cleanPassword) {
-      setError("Vui lòng nhập đầy đủ thông tin");
+      setError(t("login.required"));
       return;
     }
 
@@ -39,11 +40,11 @@ export default function LoginPage() {
 
       if (!r.ok) {
         // Đọc d.message (backend trả về message)
-        throw new Error(d.message || d.error || "Đăng nhập thất bại");
+        throw new Error(d.message || d.error || t("login.failed"));
       }
 
       login(d.user);
-      toast("Đăng nhập thành công", "success");
+      toast(t("login.success"), "success", { position: "top-center" });
       router.push("/dashboard");
     } catch (err) {
       setError(err.message);
@@ -59,15 +60,15 @@ export default function LoginPage() {
           <div className="w-14 h-14 mx-auto rounded-2xl bg-brand-600 text-white flex items-center justify-center mb-3">
             <Wallet size={28} />
           </div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Quản lý Quỹ Lớp</h1>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">Đăng nhập để quản lý tiền quỹ lớp học</p>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t("login.title")}</h1>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{t("login.description")}</p>
           <span className="inline-block mt-2 text-xs px-2 py-0.5 rounded bg-brand-100 text-brand-700 dark:bg-brand-900 dark:text-brand-300 font-medium">
             v100 - Tự nộp qua QR
           </span>
         </div>
         <form onSubmit={submit} className="space-y-4">
           <Input
-            label="Email"
+            label={t("login.email")}
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
@@ -75,7 +76,7 @@ export default function LoginPage() {
             autoComplete="email"
           />
           <Input
-            label="Mật khẩu"
+            label={t("login.password")}
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -89,7 +90,7 @@ export default function LoginPage() {
           )}
           <Button type="submit" className="w-full" disabled={loading}>
             {loading ? <Loader2 size={16} className="animate-spin" /> : null}
-            {loading ? "Đang đăng nhập..." : "Đăng nhập"}
+            {loading ? t("login.submitting") : t("login.submit")}
           </Button>
         </form>
       </Card>

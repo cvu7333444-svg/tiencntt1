@@ -1,46 +1,51 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import AppShell from "@/components/AppShell";
 import { Card, Button, Badge, Modal, Input, Spinner } from "@/components/ui";
 import QRPayModal from "@/components/QRPayModal";
 import { useToast } from "@/components/Toast";
-import { useAuth } from "@/components/Providers";
+import { useAuth, useI18n } from "@/components/Providers";
 import { formatVND, formatDate } from "@/lib/format";
-import { Megaphone, Plus, QrCode, Banknote, Clock, CheckCircle2, XCircle, Eye, Loader2 } from "lucide-react";
+import { Megaphone, Plus, QrCode, Banknote, Clock, CheckCircle2, XCircle, Eye, Loader2, Trash2 } from "lucide-react";
 import Link from "next/link";
 
 const STATUS_MAP = {
-  pending: { label: "Chua nop", color: "gray", icon: Clock },
-  self_pending: { label: "Da chuyen khoan - cho duyet", color: "yellow", icon: Clock },
-  approved: { label: "Da nop", color: "green", icon: CheckCircle2 },
-  rejected: { label: "Bi tu choi - nop lai", color: "red", icon: XCircle },
+  pending: { key: "campaigns.pending", color: "gray", icon: Clock },
+  self_pending: { key: "campaigns.selfPending", color: "yellow", icon: Clock },
+  approved: { key: "campaigns.approved", color: "green", icon: CheckCircle2 },
+  rejected: { key: "campaigns.rejected", color: "red", icon: XCircle },
 };
 
 export default function CampaignsPage() {
   const { user } = useAuth();
+  const { t } = useI18n();
+  const isMember = user?.role === "member" || user?.role === "student";
   const toast = useToast();
   const [campaigns, setCampaigns] = useState(null);
   const [me, setMe] = useState(null);
   const [qrModal, setQrModal] = useState(null); // { contributionId, amount, title }
   const [createOpen, setCreateOpen] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState(null);
   const [form, setForm] = useState({ title: "", description: "", amountPerPerson: "", deadline: "" });
   const [proofModal, setProofModal] = useState(null); // url anh bien lai
 
-  const load = () => {
+  const load = useCallback(() => {
     fetch("/api/campaigns")
       .then((r) => r.json())
       .then((d) => {
         setCampaigns(d.campaigns || []);
         setMe(d.me);
       })
-      .catch(() => toast("Khong tai duoc du lieu", "error"));
-  };
-  useEffect(load, []);
+      .catch(() => toast(t("campaigns.loadError"), "error"));
+  }, [toast, t]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
   const createCampaign = async (e) => {
     e.preventDefault();
-    if (!form.title || !form.amountPerPerson) { toast("Vui long nhap tieu de va so tien", "error"); return; }
+    if (!form.title || !form.amountPerPerson) { toast(t("campaigns.createError"), "error"); return; }
     setCreating(true);
     try {
       const r = await fetch("/api/campaigns", {
@@ -50,7 +55,7 @@ export default function CampaignsPage() {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
-      toast("Da tao dot thu moi", "success");
+      toast(t("campaigns.createSuccess"), "success");
       setCreateOpen(false);
       setForm({ title: "", description: "", amountPerPerson: "", deadline: "" });
       load();
@@ -58,6 +63,27 @@ export default function CampaignsPage() {
       toast(err.message, "error");
     } finally {
       setCreating(false);
+    }
+  };
+
+  const deleteCampaign = async (campaign) => {
+    if (!campaign.canDelete) return;
+    if (!window.confirm(t("campaigns.deleteConfirm", { title: campaign.title }))) {
+      return;
+    }
+
+    setDeletingId(String(campaign._id));
+    try {
+      const response = await fetch(`/api/campaigns/${campaign._id}`, { method: "DELETE" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || t("campaigns.deleteError"));
+      toast(t("campaigns.deleteSuccess"), "success");
+      load();
+    } catch (error) {
+      toast(error.message, "error");
+      load();
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -69,18 +95,18 @@ export default function CampaignsPage() {
     <AppShell>
       <div className="flex items-center justify-between mb-6 flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Dot thu / Nop quy</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{t("campaigns.title")}</h1>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-            {user?.role === "admin" ? "Quan ly cac dot thu va duyet nop tien" : "Cac dot quy ban can nop"}
+            {user?.role === "admin" ? t("campaigns.adminDescription") : t("campaigns.studentDescription")}
           </p>
         </div>
         {user?.role === "admin" && (
-          <Button onClick={() => setCreateOpen(true)}><Plus size={16} /> Tao dot thu</Button>
+          <Button onClick={() => setCreateOpen(true)}><Plus size={16} /> {t("campaigns.create")}</Button>
         )}
       </div>
 
       {campaigns.length === 0 && (
-        <Card className="text-center py-12 text-gray-500">Chua co dot thu nao.</Card>
+        <Card className="text-center py-12 text-gray-500">{t("campaigns.empty")}</Card>
       )}
 
       <div className="space-y-4">
@@ -98,16 +124,16 @@ export default function CampaignsPage() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <Megaphone size={18} className="text-brand-600 flex-shrink-0" />
                     <h3 className="font-semibold text-gray-900 dark:text-white">{c.title}</h3>
-                    {c.status === "closed" && <Badge color="gray">Da dong</Badge>}
+                    {c.status === "closed" && <Badge color="gray">{t("campaigns.closed")}</Badge>}
                     {selfPendingCount > 0 && user?.role === "admin" && (
-                      <Badge color="yellow"><Clock size={12} className="mr-1" />{selfPendingCount} cho duyet QR</Badge>
+                      <Badge color="yellow"><Clock size={12} className="mr-1" />{selfPendingCount} {t("campaigns.review")}</Badge>
                     )}
                   </div>
                   {c.description && <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{c.description}</p>}
                   <div className="flex items-center gap-4 mt-2 text-sm text-gray-500 dark:text-gray-400 flex-wrap">
-                    <span>Moi nguoi: <b className="text-gray-900 dark:text-white">{formatVND(c.amountPerPerson)}</b></span>
-                    {c.deadline && <span>Han nop: {formatDate(c.deadline)}</span>}
-                    <span>Ti le nop: {paidCount}/{totalCount} ({pct}%)</span>
+                    <span>{t("campaigns.amountPerPerson")} <b className="text-gray-900 dark:text-white">{formatVND(c.amountPerPerson)}</b></span>
+                    {c.deadline && <span>{t("campaigns.deadline")} {formatDate(c.deadline)}</span>}
+                    <span>{t("campaigns.progress")} {paidCount}/{totalCount} ({pct}%)</span>
                   </div>
                   {/* Thanh tien do */}
                   <div className="mt-3 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 overflow-hidden">
@@ -117,40 +143,58 @@ export default function CampaignsPage() {
 
                 {/* Phan hanh dong */}
                 <div className="flex flex-col items-end gap-2 min-w-[200px]">
-                  {user?.role === "member" && my && (
+                  {isMember && my && (
                     <>
-                      <Badge color={st.color}><st.icon size={12} className="mr-1" />{st.label}</Badge>
+                      {st && <Badge color={st.color}><st.icon size={12} className="mr-1" />{t(st.key)}</Badge>}
                       {my.status !== "approved" && (
                         <div className="flex gap-2 flex-wrap justify-end">
-                          {/* v100: NUT TU NOP - DAY MA QR */}
                           <Button
                             variant="success"
                             size="sm"
                             onClick={() => setQrModal({ contributionId: String(my._id), amount: my.amount, title: c.title })}
                           >
-                            <QrCode size={16} /> Tu nop (QR)
+                            <QrCode size={16} /> {t("campaigns.payQr")}
                           </Button>
                           <Button variant="outline" size="sm" onClick={() => {
                             fetch(`/api/contributions/${my._id}/pay`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ note: "Nop tien mat" }) })
                               .then((r) => r.json()).then((d) => {
-                                if (d.error) toast(d.error, "error"); else { toast("Da gui yeu cau nop tien mat", "success"); load(); }
+                                if (d.error) toast(d.error, "error"); else { toast(t("campaigns.cashSuccess"), "success"); load(); }
                               });
                           }}>
-                            <Banknote size={16} /> Nop tien mat
+                            <Banknote size={16} /> {t("campaigns.payCash")}
                           </Button>
                         </div>
                       )}
                       {my.status === "self_pending" && my.proofImage && (
                         <button className="text-xs text-brand-600 hover:underline flex items-center gap-1" onClick={() => setProofModal(my.proofImage)}>
-                          <Eye size={12} /> Xem bien lai da gui
+                          <Eye size={12} /> {t("campaigns.receipt")}
                         </button>
                       )}
                     </>
                   )}
                   {user?.role === "admin" && (
-                    <Link href={`/campaigns/${c._id}`}>
-                      <Button size="sm" variant="outline"><Eye size={16} /> Chi tiet / Duyet</Button>
-                    </Link>
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/campaigns/${c._id}`}
+                        className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-300 px-3 py-1.5 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-800"
+                      >
+                        <Eye size={16} /> {t("campaigns.detailApprove")}
+                      </Link>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        disabled={!c.canDelete || deletingId === String(c._id)}
+                        title={c.canDelete ? t("campaigns.deleteTitle") : t("campaigns.deleteBlocked")}
+                        onClick={() => deleteCampaign(c)}
+                      >
+                        {deletingId === String(c._id) ? (
+                          <Loader2 size={16} className="animate-spin" />
+                        ) : (
+                          <Trash2 size={16} />
+                        )}
+                        {t("campaigns.delete")}
+                      </Button>
+                    </div>
                   )}
                 </div>
               </div>
@@ -160,15 +204,15 @@ export default function CampaignsPage() {
       </div>
 
       {/* Modal tao dot thu (admin) */}
-      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title="Tao dot thu moi">
+      <Modal open={createOpen} onClose={() => setCreateOpen(false)} title={t("campaigns.createNew")}>
         <form onSubmit={createCampaign} className="space-y-4">
-          <Input label="Tieu de dot thu" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="VD: Quy hoc ky II" required />
-          <Input label="Mo ta" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Muc dich thu quy" />
-          <Input label="So tien moi nguoi (VND)" type="number" value={form.amountPerPerson} onChange={(e) => setForm({ ...form, amountPerPerson: e.target.value })} placeholder="100000" required />
-          <Input label="Han nop" type="date" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
+          <Input label={t("campaigns.createTitle")} value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} placeholder="VD: Quy hoc ky II" required />
+          <Input label={t("campaigns.description")} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder={t("campaigns.description")} />
+          <Input label={t("campaigns.amountInput")} type="number" value={form.amountPerPerson} onChange={(e) => setForm({ ...form, amountPerPerson: e.target.value })} placeholder="100000" required />
+          <Input label={t("campaigns.deadlineInput")} type="date" value={form.deadline} onChange={(e) => setForm({ ...form, deadline: e.target.value })} />
           <Button type="submit" className="w-full" disabled={creating}>
             {creating ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />}
-            {creating ? "Dang tao..." : "Tao dot thu"}
+            {creating ? t("campaigns.creating") : t("campaigns.create")}
           </Button>
         </form>
       </Modal>
@@ -186,12 +230,12 @@ export default function CampaignsPage() {
       )}
 
       {/* Modal xem bien lai */}
-      <Modal open={!!proofModal} onClose={() => setProofModal(null)} title="Anh bien lai">
+      <Modal open={!!proofModal} onClose={() => setProofModal(null)} title={t("common.receipt")}>
         {proofModal?.startsWith("data:") || proofModal?.startsWith("http") ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={proofModal} alt="Bien lai" className="w-full rounded-lg" />
         ) : (
-          <div className="text-gray-500">Khong co anh</div>
+          <div className="text-gray-500">{t("common.noImage")}</div>
         )}
       </Modal>
     </AppShell>

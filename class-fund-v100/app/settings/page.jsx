@@ -1,75 +1,79 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React from "react";
 import AppShell from "@/components/AppShell";
-import { Card, Button, Input, Spinner } from "@/components/ui";
+import { Card, Button } from "@/components/ui";
 import { useToast } from "@/components/Toast";
-import { Settings as SettingsIcon, Save, Loader2, QrCode, Info } from "lucide-react";
+import { Settings as SettingsIcon, LogOut, Sun, Moon } from "lucide-react";
+import { useAuth, useI18n, useTheme } from "@/components/Providers";
 
-// v100: Trang cai dat — cau hinh thong tin ngan hang quy de sinh ma QR tu nop
 export default function SettingsPage() {
   const toast = useToast();
-  const [form, setForm] = useState({ bin: "", accountNumber: "", accountName: "", accountHolder: "" });
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const { logout } = useAuth();
+  const { dark, toggle } = useTheme();
+  const { language, languages, setLanguage, t } = useI18n();
 
-  useEffect(() => {
-    fetch("/api/settings")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.fundBank) setForm(d.fundBank);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, []);
-
-  const save = async (e) => {
-    e.preventDefault();
-    setSaving(true);
+  const handleLogout = async () => {
     try {
-      const r = await fetch("/api/settings", {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(form),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error);
-      toast("Da luu cau hinh ngan hang. Ma QR tu nop se dung thong tin moi.", "success");
-    } catch (err) {
-      toast(err.message, "error");
-    } finally {
-      setSaving(false);
+      await logout();
+    } catch {
+      toast(t("settings.logoutError"), "error");
     }
   };
 
-  if (loading) return <AppShell><div className="flex justify-center py-20"><Spinner size={40} /></div></AppShell>;
-
   return (
     <AppShell>
-      <h1 className="text-2xl font-bold text-gray-900 dark:text-white mb-2 flex items-center gap-2">
-        <SettingsIcon size={24} /> Cai dat
+      <h1 className="mb-6 flex items-center gap-2 text-2xl font-bold text-gray-900 dark:text-white">
+        <SettingsIcon size={24} /> {t("settings.title")}
       </h1>
-      <p className="text-sm text-gray-500 dark:text-gray-400 mb-6">Cau hinh thong tin ngan hang cua quy de sinh vien <b>tu nop qua ma QR</b></p>
 
-      <Card className="max-w-xl">
-        <div className="flex items-center gap-2 mb-4 text-sm text-brand-700 dark:text-brand-300 bg-brand-50 dark:bg-brand-900/20 p-3 rounded-lg">
-          <QrCode size={16} className="flex-shrink-0" />
-          <span>Thong tin nay se duoc dung de tao ma QR VietQR khi sinh vien chon "Tu nop (QR)".</span>
-        </div>
-        <form onSubmit={save} className="space-y-4">
-          <Input label="Ma ngan hang (BIN)" value={form.bin} onChange={(e) => setForm({ ...form, bin: e.target.value })} placeholder="970422 (MB Bank)" required />
-          <div className="text-xs text-gray-400 -mt-2 flex items-start gap-1">
-            <Info size={12} className="flex-shrink-0 mt-0.5" />
-            BIN pho bien: VCB=970415, MB=970422, Techcombank=970407, VietinBank=970416, BIDV=970418, ACB=970416, Agribank=970405
+      <div className="space-y-6">
+        <Card className="max-w-xl">
+          <label className="block">
+            <span className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">{t("settings.language")}</span>
+            <select
+              value={language}
+              onChange={(event) => {
+                const nextLanguage = event.target.value;
+                setLanguage(nextLanguage);
+                toast(t("settings.languageSaved", {}, nextLanguage), "success");
+              }}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-400 dark:border-gray-600 dark:bg-gray-900 dark:text-gray-100"
+            >
+              {languages.map((item) => <option key={item.code} value={item.code}>{item.label}</option>)}
+            </select>
+          </label>
+          <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">{t("settings.languageHint")}</p>
+        </Card>
+
+        <Card className="max-w-xl">
+          <h2 className="mb-1 text-sm font-medium text-gray-900 dark:text-white">{t("settings.theme")}</h2>
+          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{t("settings.themeHint")}</p>
+          <div className="inline-flex rounded-lg border border-gray-200 p-1 dark:border-gray-700" role="group" aria-label={t("settings.theme")}>
+            <button
+              type="button"
+              aria-pressed={!dark}
+              onClick={() => { if (dark) toggle(); }}
+              className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${!dark ? "bg-brand-600 text-white" : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"}`}
+            >
+              <Sun size={16} /> {t("theme.light")}
+            </button>
+            <button
+              type="button"
+              aria-pressed={dark}
+              onClick={() => { if (!dark) toggle(); }}
+              className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors ${dark ? "bg-brand-600 text-white" : "text-gray-700 hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-700"}`}
+            >
+              <Moon size={16} /> {t("theme.dark")}
+            </button>
           </div>
-          <Input label="So tai khoan quy" value={form.accountNumber} onChange={(e) => setForm({ ...form, accountNumber: e.target.value })} placeholder="0123456789" required />
-          <Input label="Ten tai khoan (hien thi tren QR)" value={form.accountName} onChange={(e) => setForm({ ...form, accountName: e.target.value })} placeholder="QUY LOP 12A1" />
-          <Input label="Chu tai khoan" value={form.accountHolder} onChange={(e) => setForm({ ...form, accountHolder: e.target.value })} placeholder="NGUYEN VAN A" />
-          <Button type="submit" className="w-full" disabled={saving}>
-            {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-            {saving ? "Dang luu..." : "Luu cau hinh"}
+        </Card>
+
+        <Card className="max-w-xl">
+          <Button variant="danger" onClick={handleLogout}>
+            <LogOut size={16} /> {t("settings.logout")}
           </Button>
-        </form>
-      </Card>
+        </Card>
+      </div>
     </AppShell>
   );
 }
